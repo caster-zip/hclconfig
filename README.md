@@ -1,6 +1,6 @@
 # hclconfig
 
-A Go library that parses HCL configuration files with **cross-block and cross-attribute variable resolution** and a built-in `env()` function. Define your config schema as Go structs with `hcl` struct tags — the library handles dependency-aware ordered decoding so that `${database.host}` in one block or `${myvar}` in an attribute resolves automatically.
+A Go library that parses HCL configuration files with **cross-block and cross-attribute variable resolution**, a built-in `env()` function, and **encrypted secret support** via `decrypt()`. Define your config schema as Go structs with `hcl` struct tags — the library handles dependency-aware ordered decoding so that `${database.host}` in one block or `${myvar}` in an attribute resolves automatically.
 
 ## Install
 
@@ -161,6 +161,59 @@ database {
 }
 ```
 
+### Encrypted secrets
+
+Store encrypted secrets directly in config files committed to git. Use the built-in `decrypt()` function to decrypt values at load time.
+
+```hcl
+database {
+    host     = "localhost"
+    port     = 5432
+    password = decrypt("hvqO8KTHCuCQU6af...", env("CONFIG_SECRET_KEY"))
+}
+```
+
+The encryption key is kept out of the repo (e.g., in an environment variable or secrets manager). Secrets are encrypted with AES-256-GCM.
+
+#### CLI tool
+
+Use the `hclconfig` CLI to generate keys and encrypt secrets:
+
+```bash
+# Generate a new 256-bit encryption key
+go run github.com/bntso/hclconfig/cmd/hclconfig genkey
+
+# Encrypt a secret (outputs a ready-to-paste HCL snippet)
+hclconfig encrypt -key <base64-key> "super-secret-pass"
+# Output: decrypt("base64-encrypted...", env("CONFIG_SECRET_KEY"))
+
+# Use a custom env var name in the output snippet
+hclconfig encrypt -key <base64-key> -key-env MY_APP_KEY "super-secret-pass"
+
+# Decrypt a value for debugging
+hclconfig decrypt -key <base64-key> "base64-encrypted..."
+```
+
+Set the `HCLCONFIG_KEY` environment variable to avoid passing `-key` on every invocation (and to keep the key out of shell history):
+
+```bash
+export HCLCONFIG_KEY=$(hclconfig genkey)
+hclconfig encrypt "super-secret-pass"
+```
+
+#### Go API
+
+```go
+// Generate a new key
+key, _ := hclconfig.GenerateKey()
+
+// Encrypt a value
+ciphertext, _ := hclconfig.Encrypt("my-secret", key)
+
+// Decrypt a value
+plaintext, _ := hclconfig.Decrypt(ciphertext, key)
+```
+
 ### Labeled blocks
 
 Blocks with labels are accessible by their label name.
@@ -247,6 +300,11 @@ err := hclconfig.LoadFile("config.hcl", &cfg, hclconfig.WithEvalContext(ctx))
 func LoadFile(filename string, dst interface{}, opts ...Option) error
 func Load(src []byte, filename string, dst interface{}, opts ...Option) error
 func WithEvalContext(ctx *hcl.EvalContext) Option
+
+// Crypto
+func GenerateKey() (string, error)
+func Encrypt(plaintext, base64Key string) (string, error)
+func Decrypt(ciphertext, base64Key string) (string, error)
 ```
 
 ### Error types

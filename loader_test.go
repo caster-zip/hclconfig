@@ -590,6 +590,73 @@ var "b" {
 	}
 }
 
+func TestLoad_Decrypt(t *testing.T) {
+	key, err := GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret := "super-secret-password"
+	encrypted, err := Encrypt(secret, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("TEST_DECRYPT_KEY", key)
+
+	src := []byte(`
+database {
+    host = "localhost"
+    port = 5432
+}
+app {
+    db_url = decrypt("` + encrypted + `", env("TEST_DECRYPT_KEY"))
+}
+`)
+	var cfg CrossRefConfig
+	err = Load(src, "test.hcl", &cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.App.DBUrl != secret {
+		t.Errorf("app.db_url = %q, want %q", cfg.App.DBUrl, secret)
+	}
+}
+
+func TestLoad_DecryptWithVar(t *testing.T) {
+	key, err := GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret := "my-db-password"
+	encrypted, err := Encrypt(secret, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("TEST_DECRYPT_KEY", key)
+
+	src := []byte(`
+var "secret_key" {
+    default = env("TEST_DECRYPT_KEY")
+}
+
+db_url = "postgres://user:${decrypt("` + encrypted + `", var.secret_key)}@localhost/mydb"
+`)
+
+	type Config struct {
+		DBUrl string `hcl:"db_url,attr"`
+	}
+	var cfg Config
+	err = Load(src, "test.hcl", &cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := "postgres://user:" + secret + "@localhost/mydb"
+	if cfg.DBUrl != expected {
+		t.Errorf("db_url = %q, want %q", cfg.DBUrl, expected)
+	}
+}
+
 func TestLoad_Var_NoVars(t *testing.T) {
 	// Regression: configs without var blocks should still work
 	src := []byte(`

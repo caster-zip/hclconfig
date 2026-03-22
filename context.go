@@ -14,7 +14,8 @@ func newBaseEvalContext(userCtx *hcl.EvalContext) *hcl.EvalContext {
 	ctx := &hcl.EvalContext{
 		Variables: make(map[string]cty.Value),
 		Functions: map[string]function.Function{
-			"env": envFunction(),
+			"env":     envFunction(),
+			"decrypt": decryptFunction(),
 		},
 	}
 
@@ -28,6 +29,23 @@ func newBaseEvalContext(userCtx *hcl.EvalContext) *hcl.EvalContext {
 	}
 
 	return ctx
+}
+
+func decryptFunction() function.Function {
+	return function.New(&function.Spec{
+		Params: []function.Parameter{
+			{Name: "ciphertext", Type: cty.String},
+			{Name: "key", Type: cty.String},
+		},
+		Type: function.StaticReturnType(cty.String),
+		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+			plaintext, err := Decrypt(args[0].AsString(), args[1].AsString())
+			if err != nil {
+				return cty.NilVal, err
+			}
+			return cty.StringVal(plaintext), nil
+		},
+	})
 }
 
 func envFunction() function.Function {
