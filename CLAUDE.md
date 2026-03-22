@@ -23,14 +23,15 @@ There is no Makefile, linter config, or CI pipeline. Standard `go build`/`go tes
 
 ## Architecture
 
-The library has a single-package design with a clear pipeline:
+The library has a single-package design (Go 1.23+) with a clear pipeline:
 
 1. **Parse** HCL source into AST (`loader.go`)
-2. **Extract** schema from target Go struct via reflection and `hcl` struct tags
-3. **Build dependency graph** from variable references in block/attribute bodies (`resolve.go`)
-4. **Topological sort** (Kahn's algorithm) with cycle detection (`resolve.go`)
-5. **Decode** blocks/attributes in dependency order, updating the eval context incrementally (`loader.go`)
-6. **Convert** decoded Go structs back to `cty.Value` so later blocks can reference earlier ones (`convert.go`)
+2. **Extract `var` blocks** via `PartialContent` before processing user-defined blocks (`loader.go`)
+3. **Extract** schema from target Go struct via reflection and `hcl` struct tags
+4. **Build dependency graph** from variable references in block/attribute bodies — `var` blocks, user blocks, and top-level attributes all participate in the same graph (`resolve.go`)
+5. **Topological sort** (Kahn's algorithm) with cycle detection (`resolve.go`)
+6. **Decode** blocks/attributes in dependency order, updating the eval context incrementally — `var` blocks populate `evalCtx.Variables["var"]` (`loader.go`)
+7. **Convert** decoded Go structs back to `cty.Value` so later blocks can reference earlier ones (`convert.go`)
 
 ### Key files
 
@@ -45,6 +46,7 @@ The library has a single-package design with a clear pipeline:
 - `hcl:"name,attr"` / `hcl:"name,optional"` — top-level attribute
 - `hcl:"name,block"` — block (use pointer for optional, slice for repeatable)
 - `hcl:"name,label"` — block label field
+- `var` blocks are first-class — extracted before user schema, no Go struct field needed. Referenced as `${var.name}`.
 
 ### Test structure
 
