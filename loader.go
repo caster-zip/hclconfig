@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/zclconf/go-cty/cty"
 )
 
@@ -51,33 +52,26 @@ func Load(src []byte, filename string, dst interface{}, opts ...Option) error {
 
 	body := file.Body
 
-	// 2. Extract var blocks using PartialContent
-	varSchema := &hcl.BodySchema{
-		Blocks: []hcl.BlockHeaderSchema{
-			{Type: "var", LabelNames: []string{"name"}},
-		},
-	}
-	varContent, remainBody, diags := body.PartialContent(varSchema)
-	if diags.HasErrors() {
-		return &DiagnosticsError{Diags: diags}
-	}
-
-	// 3. Extract user schema from remaining body
+	// 2. Build full schema: user blocks + all top-level attributes (struct + free variables)
 	schema, _ := gohcl.ImpliedBodySchema(dst)
-	content, diags := remainBody.Content(schema)
-	if diags.HasErrors() {
-		return &DiagnosticsError{Diags: diags}
+	syntaxBody, ok := body.(*hclsyntax.Body)
+	if !ok {
+		return fmt.Errorf("unexpected body type %T; expected *hclsyntax.Body", body)
 	}
-
-	// 4. Build block info lists
-	varBlockInfos := make([]blockInfo, len(varContent.Blocks))
-	for i, block := range varContent.Blocks {
-		varBlockInfos[i] = blockInfo{
-			typeName: "var",
-			label:    block.Labels[0],
+	for name := range syntaxBody.Attributes {
+		if !schemaHasAttr(schema, name) {
+			schema.Attributes = append(schema.Attributes, hcl.AttributeSchema{Name: name})
 		}
 	}
+	content, diags := body.Content(schema)
+	if diags.HasErrors() {
+		return &DiagnosticsError{Diags: diags}
+	}
 
+	// allAttrs is content.Attributes (contains both struct-matched and free variables)
+	allAttrs := content.Attributes
+
+	// 5. Build block info lists
 	userBlockInfos := make([]blockInfo, len(content.Blocks))
 	for i, block := range content.Blocks {
 		label := ""
@@ -91,20 +85,12 @@ func Load(src []byte, filename string, dst interface{}, opts ...Option) error {
 		}
 	}
 
-	// 5. Build dependency graph with combined blocks and topological sort
-	allBlocks := make([]*hcl.Block, 0, len(varContent.Blocks)+len(content.Blocks))
-	allBlocks = append(allBlocks, varContent.Blocks...)
-	allBlocks = append(allBlocks, content.Blocks...)
-
-	allBlockInfos := make([]blockInfo, 0, len(varBlockInfos)+len(userBlockInfos))
-	allBlockInfos = append(allBlockInfos, varBlockInfos...)
-	allBlockInfos = append(allBlockInfos, userBlockInfos...)
-
-	deps := buildDependencyGraph(allBlocks, allBlockInfos, content.Attributes)
+	// 6. Build dependency graph and topological sort
+	deps := buildDependencyGraph(content.Blocks, userBlockInfos, allAttrs)
 
 	var allInfos []blockInfo
-	allInfos = append(allInfos, allBlockInfos...)
-	for name := range content.Attributes {
+	allInfos = append(allInfos, userBlockInfos...)
+	for name := range allAttrs {
 		allInfos = append(allInfos, blockInfo{typeName: name, isAttr: true})
 	}
 
@@ -113,10 +99,10 @@ func Load(src []byte, filename string, dst interface{}, opts ...Option) error {
 		return err
 	}
 
-	// 6. Build eval context
+	// 7. Build eval context
 	evalCtx := newBaseEvalContext(o.evalCtx)
 
-	// 7. Decode in topological order (both blocks and attributes)
+	// 8. Decode in topological order (both blocks and attributes)
 	dstVal := reflect.ValueOf(dst).Elem()
 	dstType := dstVal.Type()
 
@@ -152,14 +138,8 @@ func Load(src []byte, filename string, dst interface{}, opts ...Option) error {
 
 	// Build set of attribute names for dispatch in the decode loop
 	attrNames := make(map[string]bool)
-	for name := range content.Attributes {
+	for name := range allAttrs {
 		attrNames[name] = true
-	}
-
-	// Group var blocks by key
-	varBlocksByKey := make(map[string]*hcl.Block)
-	for i, bi := range varBlockInfos {
-		varBlocksByKey[bi.key()] = varContent.Blocks[i]
 	}
 
 	// Group user blocks by key for decoding
@@ -171,32 +151,10 @@ func Load(src []byte, filename string, dst interface{}, opts ...Option) error {
 		blockInfoByKey[key] = append(blockInfoByKey[key], bi)
 	}
 
-	varValues := make(map[string]cty.Value)
-
 	for _, key := range sortedKeys {
-		// --- Var block ---
-		if varBlock, ok := varBlocksByKey[key]; ok {
-			attrs, diags := varBlock.Body.JustAttributes()
-			if diags.HasErrors() {
-				return &DiagnosticsError{Diags: diags}
-			}
-			defaultAttr, ok := attrs["default"]
-			if !ok {
-				return fmt.Errorf("%s:%d: var %q missing required \"default\" attribute",
-					varBlock.DefRange.Filename, varBlock.DefRange.Start.Line, varBlock.Labels[0])
-			}
-			val, diags := defaultAttr.Expr.Value(evalCtx)
-			if diags.HasErrors() {
-				return &DiagnosticsError{Diags: diags}
-			}
-			varValues[varBlock.Labels[0]] = val
-			evalCtx.Variables["var"] = cty.ObjectVal(varValues)
-			continue
-		}
-
-		// --- Top-level attribute ---
+		// --- Top-level attribute (struct-matched or free variable) ---
 		if attrNames[key] {
-			attr := content.Attributes[key]
+			attr := allAttrs[key]
 			val, diags := attr.Expr.Value(evalCtx)
 			if diags.HasErrors() {
 				return &DiagnosticsError{Diags: diags}
@@ -406,4 +364,13 @@ func addLabeledSliceToEvalCtx(evalCtx *hcl.EvalContext, typeName string, sliceVa
 	if len(labelMap) > 0 {
 		evalCtx.Variables[typeName] = cty.ObjectVal(labelMap)
 	}
+}
+
+func schemaHasAttr(schema *hcl.BodySchema, name string) bool {
+	for _, a := range schema.Attributes {
+		if a.Name == name {
+			return true
+		}
+	}
+	return false
 }

@@ -118,36 +118,23 @@ The resolution chain `mysubvar` -> `myvar` -> `instance.build` is resolved autom
 
 ### Variables
 
-Define reusable variables with `var` blocks to avoid repetition. Variables are accessible via `${var.name}` and don't require any Go struct definition.
+Define reusable variables as bare top-level attributes. Any attribute not mapped to a Go struct field becomes a free variable, available for interpolation as `${name}` throughout the config.
 
 ```hcl
-var "api_host" {
-  default = "api.example.com"
-}
-
-var "api_port" {
-  default = 8080
-}
+api_host = "api.example.com"
+api_port = 8080
 
 service {
-  url = "http://${var.api_host}:${var.api_port}/api"
+  url = "http://${api_host}:${api_port}/api"
 }
 ```
 
 Variables can reference other variables, environment variables, and user-defined blocks:
 
 ```hcl
-var "base_domain" {
-  default = "example.com"
-}
-
-var "api_host" {
-  default = "api.${var.base_domain}"
-}
-
-var "db_host" {
-  default = env("DB_HOST")
-}
+base_domain = "example.com"
+api_host    = "api.${base_domain}"
+db_host     = env("DB_HOST")
 ```
 
 ### Environment variables

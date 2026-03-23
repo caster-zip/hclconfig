@@ -479,16 +479,11 @@ func TestLoad_Var_Basic(t *testing.T) {
 
 func TestLoad_Var_Chain(t *testing.T) {
 	src := []byte(`
-var "base" {
-  default = "example.com"
-}
-
-var "api_host" {
-  default = "api.${var.base}"
-}
+base = "example.com"
+api_host = "api.${base}"
 
 service {
-  url = "http://${var.api_host}/api"
+  url = "http://${api_host}/api"
 }
 `)
 	var cfg VarTestConfig
@@ -507,12 +502,10 @@ func TestLoad_Var_WithEnv(t *testing.T) {
 	defer os.Unsetenv("TEST_VAR_HOST")
 
 	src := []byte(`
-var "host" {
-  default = env("TEST_VAR_HOST")
-}
+host = env("TEST_VAR_HOST")
 
 service {
-  url = "http://${var.host}/api"
+  url = "http://${host}/api"
 }
 `)
 	var cfg VarTestConfig
@@ -528,16 +521,11 @@ service {
 
 func TestLoad_Var_NumericType(t *testing.T) {
 	src := []byte(`
-var "api_host" {
-  default = "api.example.com"
-}
-
-var "api_port" {
-  default = 8080
-}
+api_host = "api.example.com"
+api_port = 8080
 
 service {
-  url = "http://${var.api_host}:${var.api_port}/api"
+  url = "http://${api_host}:${api_port}/api"
 }
 `)
 	var cfg VarTestConfig
@@ -551,34 +539,10 @@ service {
 	}
 }
 
-func TestLoad_Var_MissingDefault(t *testing.T) {
-	src := []byte(`
-var "host" {
-}
-
-service {
-  url = "http://${var.host}/api"
-}
-`)
-	var cfg VarTestConfig
-	err := Load(src, "test.hcl", &cfg)
-	if err == nil {
-		t.Fatal("expected error for missing default")
-	}
-	if !strings.Contains(err.Error(), "missing required \"default\" attribute") {
-		t.Errorf("expected missing default error, got: %v", err)
-	}
-}
-
 func TestLoad_Var_Cycle(t *testing.T) {
 	src := []byte(`
-var "a" {
-  default = "${var.b}"
-}
-
-var "b" {
-  default = "${var.a}"
-}
+a = "${b}"
+b = "${a}"
 `)
 	var cfg struct{}
 	err := Load(src, "test.hcl", &cfg)
@@ -636,11 +600,9 @@ func TestLoad_DecryptWithVar(t *testing.T) {
 	t.Setenv("TEST_DECRYPT_KEY", key)
 
 	src := []byte(`
-var "secret_key" {
-    default = env("TEST_DECRYPT_KEY")
-}
+secret_key = env("TEST_DECRYPT_KEY")
 
-db_url = "postgres://user:${decrypt("` + encrypted + `", var.secret_key)}@localhost/mydb"
+db_url = "postgres://user:${decrypt("` + encrypted + `", secret_key)}@localhost/mydb"
 `)
 
 	type Config struct {
@@ -658,7 +620,7 @@ db_url = "postgres://user:${decrypt("` + encrypted + `", var.secret_key)}@localh
 }
 
 func TestLoad_Var_NoVars(t *testing.T) {
-	// Regression: configs without var blocks should still work
+	// Regression: configs without free variables should still work
 	src := []byte(`
 database {
     host = "localhost"

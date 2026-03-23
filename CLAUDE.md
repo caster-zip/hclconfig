@@ -26,12 +26,11 @@ There is no Makefile, linter config, or CI pipeline. Standard `go build`/`go tes
 The library has a single-package design (Go 1.23+) with a clear pipeline:
 
 1. **Parse** HCL source into AST (`loader.go`)
-2. **Extract `var` blocks** via `PartialContent` before processing user-defined blocks (`loader.go`)
-3. **Extract** schema from target Go struct via reflection and `hcl` struct tags
-4. **Build dependency graph** from variable references in block/attribute bodies — `var` blocks, user blocks, and top-level attributes all participate in the same graph (`resolve.go`)
-5. **Topological sort** (Kahn's algorithm) with cycle detection (`resolve.go`)
-6. **Decode** blocks/attributes in dependency order, updating the eval context incrementally — `var` blocks populate `evalCtx.Variables["var"]` (`loader.go`)
-7. **Convert** decoded Go structs back to `cty.Value` so later blocks can reference earlier ones (`convert.go`)
+2. **Extract** schema from target Go struct via reflection and `hcl` struct tags, augmented with any additional top-level attributes (free variables) found in the HCL body (`loader.go`)
+3. **Build dependency graph** from variable references in block/attribute bodies — user blocks, struct-matched attributes, and free variables all participate in the same graph (`resolve.go`)
+4. **Topological sort** (Kahn's algorithm) with cycle detection (`resolve.go`)
+5. **Decode** blocks/attributes in dependency order, updating the eval context incrementally — all top-level attributes (struct-matched and free) are added to `evalCtx.Variables` (`loader.go`)
+6. **Convert** decoded Go structs back to `cty.Value` so later blocks can reference earlier ones (`convert.go`)
 
 ### Key files
 
@@ -46,7 +45,7 @@ The library has a single-package design (Go 1.23+) with a clear pipeline:
 - `hcl:"name,attr"` / `hcl:"name,optional"` — top-level attribute
 - `hcl:"name,block"` — block (use pointer for optional, slice for repeatable)
 - `hcl:"name,label"` — block label field
-- `var` blocks are first-class — extracted before user schema, no Go struct field needed. Referenced as `${var.name}`.
+- Any top-level attribute not in the Go struct becomes a free variable, available for interpolation as `${name}`.
 
 ### Test structure
 
