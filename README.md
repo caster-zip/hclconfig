@@ -156,7 +156,7 @@ Store encrypted secrets directly in config files committed to git. Use the built
 database {
     host     = "localhost"
     port     = 5432
-    password = decrypt("hvqO8KTHCuCQU6af...", env("CONFIG_SECRET_KEY"))
+    password = decrypt("hvqO8KTHCuCQU6af...", env("HCLCONFIG_KEY"))
 }
 ```
 
@@ -172,7 +172,7 @@ go run github.com/bntso/hclconfig/cmd/hclconfig genkey
 
 # Encrypt a secret (outputs a ready-to-paste HCL snippet)
 hclconfig encrypt -key <base64-key> "super-secret-pass"
-# Output: decrypt("base64-encrypted...", env("CONFIG_SECRET_KEY"))
+# Output: decrypt("base64-encrypted...", env("HCLCONFIG_KEY"))
 
 # Use a custom env var name in the output snippet
 hclconfig encrypt -key <base64-key> -key-env MY_APP_KEY "super-secret-pass"

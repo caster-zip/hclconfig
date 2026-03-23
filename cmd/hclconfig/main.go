@@ -64,7 +64,7 @@ func cmdGenkey() {
 func cmdEncrypt(args []string) {
 	fs := flag.NewFlagSet("encrypt", flag.ExitOnError)
 	keyFlag := fs.String("key", "", "base64-encoded 256-bit encryption key")
-	keyEnvFlag := fs.String("key-env", "CONFIG_SECRET_KEY", "env var name to reference in the output snippet")
+	keyEnvFlag := fs.String("key-env", "HCLCONFIG_KEY", "env var name to reference in the output snippet")
 	fs.Parse(args)
 
 	if fs.NArg() != 1 {
