@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Go library (`github.com/bntso/hclconfig`) for parsing HCL configuration files with dependency-aware variable resolution. It decodes HCL into Go structs, automatically resolving cross-block references, labeled block references, nested block references, and environment variables in the correct order via topological sorting.
+Go library (`github.com/bntso/hclconfig`) for parsing HCL configuration files with dependency-aware variable resolution. It decodes HCL into Go structs, automatically resolving cross-block references, labeled block references, nested block references, and environment variables in the correct order via topological sorting. Also ships an AES-256-GCM secret encryption module (`decrypt()` HCL function + `cmd/hclconfig` CLI for key generation and encrypt/decrypt operations).
 
 ## Commands
 
@@ -17,6 +17,13 @@ go test -v -run TestLoadFile_Simple
 
 # Run tests with coverage
 go test -cover ./...
+
+# Build / run the CLI
+go build -o /tmp/hclconfig ./cmd/hclconfig
+go run ./cmd/hclconfig genkey
+
+# Run the example
+go run ./examples/basic
 ```
 
 There is no Makefile, linter config, or CI pipeline. Standard `go build`/`go test` tooling only.
@@ -37,8 +44,11 @@ The library has a single-package design (Go 1.23+) with a clear pipeline:
 - **`loader.go`** — Public API (`LoadFile`, `Load`, `WithEvalContext`), schema extraction, ordered decoding loop
 - **`resolve.go`** — Dependency graph construction, topological sort, cycle detection (`CycleError`)
 - **`convert.go`** — Bidirectional Go struct ↔ `cty.Value` conversion using reflection
-- **`context.go`** — Base eval context with built-in `env()` function
+- **`context.go`** — Base eval context with built-in `env()` and `decrypt()` HCL functions
+- **`crypto.go`** — AES-256-GCM `GenerateKey` / `Encrypt` / `Decrypt` Go API; nonce is prepended to ciphertext, both base64-encoded
 - **`errors.go`** — `CycleError` and `DiagnosticsError` types
+- **`cmd/hclconfig/`** — CLI for `genkey`, `encrypt`, `decrypt`. Reads the key from `-key` flag or `HCLCONFIG_KEY` env var (the canonical name — keep it consistent in docs and examples)
+- **`examples/basic/`** — runnable end-to-end example (`go run ./examples/basic`)
 
 ### HCL struct tag conventions
 
