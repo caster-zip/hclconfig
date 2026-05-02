@@ -5,7 +5,7 @@ A Go library that parses HCL configuration files with **cross-block and cross-at
 ## Install
 
 ```bash
-go get github.com/bntso/hclconfig@v0.5.1
+go get github.com/bntso/hclconfig@v0.6.0
 ```
 
 ## Usage
