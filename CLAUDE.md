@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Go library (`github.com/bntso/hclconfig`) for parsing HCL configuration files with dependency-aware variable resolution. It decodes HCL into Go structs, automatically resolving cross-block references, labeled block references, nested block references, and environment variables in the correct order via topological sorting. Also ships an AES-256-GCM secret encryption module: `CIPHER["..."]` sentinel for at-rest encrypted values (transparently decrypted at load time using `HCLCONFIG_KEY`), `PLAIN["..."]` sentinel for `hclconfig edit` tempfiles, and a CLI for `genkey`, `encrypt`, `decrypt`, `edit`, `migrate` (rewrite legacy `decrypt()` calls), and `rekey` (rotate the key on a file). The legacy `decrypt()` HCL function is kept for backwards compatibility but deprecated.
+Go library (`github.com/caster-zip/hclconfig`) for parsing HCL configuration files with dependency-aware variable resolution. It decodes HCL into Go structs, automatically resolving cross-block references, labeled block references, nested block references, and environment variables in the correct order via topological sorting. Also ships an AES-256-GCM secret encryption module: `CIPHER["..."]` sentinel for at-rest encrypted values (transparently decrypted at load time using `HCLCONFIG_KEY`), `PLAIN["..."]` sentinel for `hclconfig edit` tempfiles, and a CLI for `genkey`, `encrypt`, `decrypt`, `edit`, `migrate` (rewrite legacy `decrypt()` calls), and `rekey` (rotate the key on a file). The legacy `decrypt()` HCL function is kept for backwards compatibility but deprecated.
 
 ## Commands
 

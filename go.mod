@@ -1,4 +1,4 @@
-module github.com/bntso/hclconfig
+module github.com/caster-zip/hclconfig
 
 go 1.23.0
 

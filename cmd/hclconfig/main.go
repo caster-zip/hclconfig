@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/bntso/hclconfig"
+	"github.com/caster-zip/hclconfig"
 )
 
 func main() {

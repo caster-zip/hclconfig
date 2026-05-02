@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bntso/hclconfig"
+	"github.com/caster-zip/hclconfig"
 )
 
 func TestRewriteCipherToPlain_RoundTrip(t *testing.T) {

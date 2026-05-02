@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	hclconfig "github.com/bntso/hclconfig"
+	hclconfig "github.com/caster-zip/hclconfig"
 )
 
 type Config struct {

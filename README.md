@@ -5,7 +5,7 @@ A Go library that parses HCL configuration files with **cross-block and cross-at
 ## Install
 
 ```bash
-go get github.com/bntso/hclconfig@v0.6.0
+go get github.com/caster-zip/hclconfig@v0.6.1
 ```
 
 ## Usage
@@ -191,7 +191,7 @@ The `PLAIN["..."]` content is Go-style quoted (use `\"` for embedded quotes, `\\
 
 ```bash
 # Generate a new 256-bit encryption key
-go run github.com/bntso/hclconfig/cmd/hclconfig genkey
+go run github.com/caster-zip/hclconfig/cmd/hclconfig genkey
 
 # Encrypt a secret (outputs a ready-to-paste CIPHER[...] snippet)
 hclconfig encrypt -key <base64-key> "super-secret-pass"
