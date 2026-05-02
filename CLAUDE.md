@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Go library (`github.com/bntso/hclconfig`) for parsing HCL configuration files with dependency-aware variable resolution. It decodes HCL into Go structs, automatically resolving cross-block references, labeled block references, nested block references, and environment variables in the correct order via topological sorting. Also ships an AES-256-GCM secret encryption module (`decrypt()` HCL function + `cmd/hclconfig` CLI for key generation and encrypt/decrypt operations).
+Go library (`github.com/bntso/hclconfig`) for parsing HCL configuration files with dependency-aware variable resolution. It decodes HCL into Go structs, automatically resolving cross-block references, labeled block references, nested block references, and environment variables in the correct order via topological sorting. Also ships an AES-256-GCM secret encryption module: `CIPHER["..."]` sentinel for at-rest encrypted values (transparently decrypted at load time using `HCLCONFIG_KEY`), `PLAIN["..."]` sentinel for `hclconfig edit` tempfiles, and a CLI for `genkey`, `encrypt`, `decrypt`, `edit`, `migrate` (rewrite legacy `decrypt()` calls), and `rekey` (rotate the key on a file). The legacy `decrypt()` HCL function is kept for backwards compatibility but deprecated.
 
 ## Commands
 
@@ -41,13 +41,14 @@ The library has a single-package design (Go 1.23+) with a clear pipeline:
 
 ### Key files
 
-- **`loader.go`** — Public API (`LoadFile`, `Load`, `WithEvalContext`), schema extraction, ordered decoding loop
+- **`loader.go`** — Public API (`LoadFile`, `Load`, `WithEvalContext`, `WithEncryptionKey`), schema extraction, ordered decoding loop
 - **`resolve.go`** — Dependency graph construction, topological sort, cycle detection (`CycleError`)
 - **`convert.go`** — Bidirectional Go struct ↔ `cty.Value` conversion using reflection
-- **`context.go`** — Base eval context with built-in `env()` and `decrypt()` HCL functions
+- **`context.go`** — Base eval context with built-in `env()` and (deprecated) `decrypt()` HCL functions
+- **`secrets.go`** — Pre-evaluation AST scan for `CIPHER["..."]` / `PLAIN["..."]` sentinels. Builds a `cty.MapVal(string→string)` of decrypted ciphertexts and injects it as the `CIPHER` variable so HCL evaluates `CIPHER["base64"]` as a normal map lookup. Errors loudly on `PLAIN["..."]` (a tempfile loaded as config).
 - **`crypto.go`** — AES-256-GCM `GenerateKey` / `Encrypt` / `Decrypt` Go API; nonce is prepended to ciphertext, both base64-encoded
 - **`errors.go`** — `CycleError` and `DiagnosticsError` types
-- **`cmd/hclconfig/`** — CLI for `genkey`, `encrypt`, `decrypt`. Reads the key from `-key` flag or `HCLCONFIG_KEY` env var (the canonical name — keep it consistent in docs and examples)
+- **`cmd/hclconfig/`** — CLI for `genkey`, `encrypt`, `decrypt`, `edit`, `migrate`, `rekey`. Reads the key from `-key` flag or `HCLCONFIG_KEY` env var (the canonical name — keep it consistent in docs and examples). `edit` round-trips `CIPHER` ↔ `PLAIN` via regex on source bytes (no HCL parse), uses `$EDITOR`, atomic-renames on save.
 - **`examples/basic/`** — runnable end-to-end example (`go run ./examples/basic`)
 
 ### HCL struct tag conventions

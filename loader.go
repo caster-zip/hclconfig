@@ -16,7 +16,8 @@ import (
 type Option func(*options)
 
 type options struct {
-	evalCtx *hcl.EvalContext
+	evalCtx       *hcl.EvalContext
+	encryptionKey string
 }
 
 // WithEvalContext provides a custom HCL EvalContext that will be merged with
@@ -24,6 +25,15 @@ type options struct {
 func WithEvalContext(ctx *hcl.EvalContext) Option {
 	return func(o *options) {
 		o.evalCtx = ctx
+	}
+}
+
+// WithEncryptionKey sets the base64-encoded encryption key used to decrypt
+// CIPHER["..."] sentinels at load time. If unset, the key is read from the
+// HCLCONFIG_KEY environment variable.
+func WithEncryptionKey(key string) Option {
+	return func(o *options) {
+		o.encryptionKey = key
 	}
 }
 
@@ -57,6 +67,16 @@ func Load(src []byte, filename string, dst interface{}, opts ...Option) error {
 	syntaxBody, ok := body.(*hclsyntax.Body)
 	if !ok {
 		return fmt.Errorf("unexpected body type %T; expected *hclsyntax.Body", body)
+	}
+
+	// Resolve secret sentinels (CIPHER["..."] / PLAIN["..."]) before evaluation.
+	key := o.encryptionKey
+	if key == "" {
+		key = envEncryptionKey()
+	}
+	cipherMap, err := resolveCipherSentinel(syntaxBody, key)
+	if err != nil {
+		return err
 	}
 	for name := range syntaxBody.Attributes {
 		if !schemaHasAttr(schema, name) {
@@ -101,6 +121,9 @@ func Load(src []byte, filename string, dst interface{}, opts ...Option) error {
 
 	// 7. Build eval context
 	evalCtx := newBaseEvalContext(o.evalCtx)
+	if cipherMap != cty.NilVal {
+		evalCtx.Variables[SentinelCipher] = cipherMap
+	}
 
 	// 8. Decode in topological order (both blocks and attributes)
 	dstVal := reflect.ValueOf(dst).Elem()
